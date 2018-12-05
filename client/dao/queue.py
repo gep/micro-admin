@@ -53,16 +53,6 @@ class QueuePersister(AbstractPersister):
         except asyncio.TimeoutError:
             logging.error("Timeout!")
 
-        # with async_timeout.timeout(self._wait_timeout, loop=self.loop):
-        #     got_response = False
-        #     while not got_response:
-        #         if type == 'get' and self._get_requests[persist_hash]['status'] == self.object_request_status_requested:
-        #             await asyncio.sleep(self._async_sleep, loop=self.loop)
-        #         else:
-        #             got_response = True
-        #             object = self._get_requests[persist_hash]['object']
-        #     return after(object)
-
     async def _get_object_from_response(self, type, object, persist_hash, after):
         got_response = False
         while not got_response:
