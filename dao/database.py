@@ -7,11 +7,14 @@ from users.models import CustomMicroUser
 
 @singleton
 class DatabasePersister(AbstractPersister):
-    def __init__(self, driver=None):
+    def __init__(self, driver=None, host=None):
         super().__init__(driver)
-        self.assign_callbacks_for_client(driver)
-        self.driver.subscribe(self.get_channel)
         logging.basicConfig(format='[%(asctime)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S', level=logging.INFO)
+        self.assign_callbacks_for_client(self.driver)
+        self.host = host
+
+    async def connect(self):
+        await self.driver.connect(self.host, )
 
     def create(self, object, callback=None):
         object.save()
@@ -32,21 +35,21 @@ class DatabasePersister(AbstractPersister):
 
     def assign_callbacks_for_client(self, client):
         def _on_connect(client, flags, rc, properties):
-            logging.info('Connected')
-            # client.subscribe('TEST/#', qos=0)
+            client.subscribe(self.get_channel)
+            logging.info('Connected and subscribed')
 
         def _on_message(client, topic, payload, qos, properties):
-            logging.info('RECV MSG: %s', payload)
+            logging.info('RECEIVED A MSG: %s. Properties: %s', payload, properties)
             if topic == self.get_channel:
                 user = self.get(deserialized=self._deserialize_object(payload))
-                client.publish(self.get_channel_response, self._serialize_object(user), qos=qos)
+                client.publish(self.get_channel_response, self._serialize_object(user), qos=qos, user_property=('persist_hash', dict(properties['user_property'])['persist_hash']))
                 logging.info("Published to the response: %s. Message: %s", self.get_channel_response, self._serialize_object(user))
 
         def _on_disconnect(client, packet, exc=None):
             logging.info('Disconnected')
 
         def _on_subscribe(client, mid, qos):
-            logging.info('SUBSCRIBED')
+            logging.info('SUBSCRIBED %s', mid)
 
         client.on_connect = _on_connect
         client.on_message = _on_message

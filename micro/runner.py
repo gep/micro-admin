@@ -22,36 +22,15 @@ def ask_exit(*args):
     STOP.set()
 
 
-# async def main(broker_host, token):
-#     client = MQTTClient('asdfghjk')
-#     client.on_message = client_id
-#     client.on_connect = on_connect
-#     client.set_auth_credentials(token, None)
-#     await client.connect(broker_host, 1883, keepalive=60)
-#     client.publish(TOPIC, 'Message payload', response_topic='RESPONSE/TOPIC')
-#
-#     await STOP.wait()
-#     await client.disconnect()
-
-
-
 async def main(broker_host, token, loop):
     global MQTTClient, logging, DatabasePersister, STOP
+    logging.info("Client ID %s", os.environ.get('MQTT_CLIENT_ID'))
     dbclient = MQTTClient(os.environ.get('MQTT_CLIENT_ID'))
 
-    # dbclient.on_connect = on_connect
-    # dbclient.on_message = on_message
-    # dbclient.on_disconnect = on_disconnect
-    # dbclient.on_subscribe = on_subscribe
-
     dbclient.set_auth_credentials(token, None)
-    await dbclient.connect(broker_host)
 
-    queuePersist = DatabasePersister(dbclient)
-    # user = await queuePersist.get(DjangoUser(id=1), after_get)
-
-
-    # client.publish('TEST/TIME', str(time.time()), qos=1)
+    persister = DatabasePersister(dbclient, broker_host)
+    await persister.connect()
 
     await STOP.wait()
     await dbclient.disconnect()

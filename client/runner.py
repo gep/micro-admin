@@ -16,10 +16,7 @@ from users.models import CustomMicroUser
 
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
-
 STOP = asyncio.Event()
-
-# client = MQTTClient(os.environ.get('MQTT_CLIENT_ID'))
 
 
 def ask_exit(*args):
@@ -27,29 +24,28 @@ def ask_exit(*args):
 
 
 def after_get(user):
-    logging.info('Got user: %s', user.get_full_name())
+    logging.info('Got user: %s', user)
     return user
 
 
 async def main(broker_host, token, loop):
-    global MQTTClient, QueuePersister, CustomMicroUser, logging, after_get
-    # from gmqtt import Client as MQTTClientCustom
+    global MQTTClient, QueuePersister, CustomMicroUser, logging, after_get, STOP, asyncio
     logging.info("Client ID %s", os.environ.get('MQTT_CLIENT_ID'))
     client = MQTTClient(os.environ.get('MQTT_CLIENT_ID'))
-
-    # client.on_connect = on_connect
-    # client.on_message = on_message
-    # client.on_disconnect = on_disconnect
-    # client.on_subscribe = on_subscribe
 
     client.set_auth_credentials(token, None)
     await client.connect(broker_host)
 
     queuePersist = QueuePersister(client, loop)
-    user = await queuePersist.get(CustomMicroUser(pk=1), after_get)
 
+    users_to_get = []
 
-    # client.publish('TEST/TIME', str(time.time()), qos=1)
+    for i in range(1, 10000):
+        users_to_get.append(asyncio.create_task(queuePersist.get(CustomMicroUser(pk=1), after_get)))
+
+    await asyncio.gather(
+        *users_to_get
+    )
 
     await STOP.wait()
     await client.disconnect()

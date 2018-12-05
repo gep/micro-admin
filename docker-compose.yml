@@ -2,13 +2,15 @@ version: '3'
 services:
   micro:
     environment:
-      MQTT_CLIENT_ID: subsciber
+      MQTT_CLIENT_ID: subscriber
       MQTT_CLIENT_TOKEN: PkdwlvBTXnso7ARxN1mesp0bhq2O1vSEDT0MdpwYCMcycSTNJ3PZjG0oUR2LaIeD
     build:
       context: .
       dockerfile: DjangoDocker
     image: micro
     working_dir: /usr/src/app
+    depends_on:
+      - postgres
     volumes:
       - .:/usr/src/app
     ports:
@@ -22,6 +24,8 @@ services:
       dockerfile: QueueDocker
     image: client
     working_dir: /usr/src/app/client
+    depends_on:
+      - postgres
     volumes:
       - .:/usr/src/app
     ports:
@@ -37,6 +41,8 @@ services:
       POSTGRES_USER: root
       PGDATA: /var/lib/postgresql/data/pgdata
   adminer:
+    depends_on:
+      - postgres
     image: adminer
     restart: always
     ports:

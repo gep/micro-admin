@@ -17,7 +17,8 @@ class QueuePersister(AbstractPersister):
         self._delete_requests = {}
         self._update_requests = {}
 
-        self.wait_timeout = 30
+        self._wait_timeout = 15
+        self._async_sleep = 0.01
 
         logging.basicConfig(format='[%(asctime)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S', level=logging.INFO)
         self.assign_callbacks_for_client(driver)
@@ -39,25 +40,41 @@ class QueuePersister(AbstractPersister):
 
     async def get(self, object, after):
         payload  = self._serialize_object(object)
-        self.driver.publish(self.get_channel, payload, qos=self.qos_level)
+        persist_hash = self._generate_hash()
+        logging.info("Object hash: %s", persist_hash)
+        self.driver.publish(self.get_channel, payload, qos=self.qos_level, user_property=('persist_hash', persist_hash))
         logging.info('Published to %s. Id: %s. Payload: %s', self.get_channel, object.id, payload)
-        # logging.info(object.)
-        self._get_requests[object.get_persist_hash()] = {'status': self.object_request_status_requested}
-        return await self._wait('get', object, after)
+        self._get_requests[persist_hash] = {'status': self.object_request_status_requested}
+        return await self._wait('get', object, persist_hash, after)
 
-    async def _wait(self, type, object, after):
-        with async_timeout.timeout(self.wait_timeout):
-            got_response = False
-            while not got_response:
-                if type == 'get' and self._get_requests[object.get_persist_hash()]['status'] == self.object_request_status_requested:
-                    await asyncio.sleep(0.2, loop=self.loop)
-                else:
-                    got_response = True
-                    object = self._get_requests[object.get_persist_hash()]['object']
-            return after(object)
+    async def _wait(self, type, object, persist_hash, after):
+        try:
+            await asyncio.wait_for(self._get_object_from_response(type, object, persist_hash, after), timeout=self._wait_timeout)
+        except asyncio.TimeoutError:
+            logging.error("Timeout!")
 
-    def set_get_status(self, status, object):
-        self._get_requests[object.get_persist_hash()] = {'status': status, 'object': object}
+        # with async_timeout.timeout(self._wait_timeout, loop=self.loop):
+        #     got_response = False
+        #     while not got_response:
+        #         if type == 'get' and self._get_requests[persist_hash]['status'] == self.object_request_status_requested:
+        #             await asyncio.sleep(self._async_sleep, loop=self.loop)
+        #         else:
+        #             got_response = True
+        #             object = self._get_requests[persist_hash]['object']
+        #     return after(object)
+
+    async def _get_object_from_response(self, type, object, persist_hash, after):
+        got_response = False
+        while not got_response:
+            if type == 'get' and self._get_requests[persist_hash]['status'] == self.object_request_status_requested:
+                await asyncio.sleep(self._async_sleep, loop=self.loop)
+            else:
+                got_response = True
+                object = self._get_requests[persist_hash]['object']
+        return after(object)
+
+    def set_get_status(self, status, persist_hash, object):
+        self._get_requests[persist_hash] = {'status': status, 'object': object}
 
     def assign_callbacks_for_client(self, client):
         def _on_connect(client, flags, rc, properties):
@@ -65,10 +82,10 @@ class QueuePersister(AbstractPersister):
             # client.subscribe('TEST/#', qos=0)
 
         def _on_message(client, topic, payload, qos, properties):
-            logging.info('RECV MSG: %s', payload)
+            logging.info('RECV MSG: %s. Properties: %s', payload, properties)
             if topic == self.get_channel_response:
                 user = self._deserialize_object(payload)
-                self.set_get_status(self.object_request_status_responsed, user.object)
+                self.set_get_status(self.object_request_status_responsed, dict(properties['user_property'])['persist_hash'], user.object)
 
         def _on_disconnect(client, packet, exc=None):
             logging.info('Client Disconnected')
@@ -80,7 +97,3 @@ class QueuePersister(AbstractPersister):
         client.on_message = _on_message
         client.on_disconnect = _on_disconnect
         client.on_subscribe = _on_subscribe
-
-    # def _get_object_from
-    # def _publish_object(self, object, channel):
-    #     self.driver.publish(self.create_channel, self._serialize_object(object), qos=self.qos_level)
