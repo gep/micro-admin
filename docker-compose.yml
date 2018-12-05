@@ -1,0 +1,46 @@
+version: '3'
+services:
+  micro:
+    environment:
+      MQTT_CLIENT_ID: subsciber
+      MQTT_CLIENT_TOKEN: PkdwlvBTXnso7ARxN1mesp0bhq2O1vSEDT0MdpwYCMcycSTNJ3PZjG0oUR2LaIeD
+    build:
+      context: .
+      dockerfile: DjangoDocker
+    image: micro
+    working_dir: /usr/src/app
+    volumes:
+      - .:/usr/src/app
+#    command: "python manage.py runserver 0.0.0.0:8000"
+    ports:
+      - 8191:8000
+  client:
+    environment:
+      MQTT_CLIENT_ID: client
+      MQTT_CLIENT_TOKEN: PkdwlvBTXnso7ARxN1mesp0bhq2O1vSEDT0MdpwYCMcycSTNJ3PZjG0oUR2LaIeD
+    build:
+      context: .
+      dockerfile: QueueDocker
+    image: client
+    working_dir: /usr/src/app/client
+    volumes:
+      - .:/usr/src/app
+    ports:
+      - 8192:8000
+  postgres:
+    restart: always
+    image: postgres
+#    ports:
+#      - "3320:3306"
+    volumes:
+      - ./.postgres-data:/var/lib/postgresql/data/pgdata
+    environment:
+      POSTGRES_PASSWORD: 42
+      POSTGRES_DB: micro
+      POSTGRES_USER: root
+      PGDATA: /var/lib/postgresql/data/pgdata
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 9101:8080

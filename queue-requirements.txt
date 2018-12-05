@@ -1,0 +1,6 @@
+gmqtt
+uvloop
+django
+singleton-decorator
+async-timeout
+psycopg2-binary
